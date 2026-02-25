@@ -1,0 +1,550 @@
+<!DOCTYPE html>
+
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Eastside Homes">
+<meta name="theme-color" content="#0b1520">
+<title>Eastside Homes</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,wght@0,400;0,600;0,700;1,400&family=DM+Sans:wght@300;400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<style>
+:root {
+  --bg:#0b1520; --surface:#111e2d; --s2:#192840; --s3:#1f3252;
+  --border:#243a52; --accent:#c8a96e; --green:#4ecb8d; --blue:#5ba3e8;
+  --red:#e87575; --text:#dce8f5; --t2:#6d8fad; --t3:#3d5f7a;
+  --safe-top:env(safe-area-inset-top,0px); --safe-bot:env(safe-area-inset-bottom,0px);
+  --tbh:62px;
+}
+*{margin:0;padding:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent;}
+html,body{height:100%;overflow:hidden;}
+body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);}
+
+.view{position:fixed;inset:0;display:flex;flex-direction:column;visibility:hidden;opacity:0;transition:opacity .22s;pointer-events:none;}
+.view.active{visibility:visible;opacity:1;pointer-events:all;}
+
+/* header */
+.hdr{padding:calc(var(–safe-top) + 14px) 18px 11px;background:var(–bg);border-bottom:1px solid var(–border);flex-shrink:0;z-index:10;}
+.hdr-row{display:flex;align-items:center;justify-content:space-between;}
+.hdr h1{font-family:‘Fraunces’,serif;font-size:23px;font-weight:700;font-style:italic;background:linear-gradient(130deg,#c8a96e 0%,#f0dfa0 55%,#c8a96e 100%);-webkit-background-clip:text;-webkit-text-fill-color:transparent;letter-spacing:-.4px;}
+.hdr-sub{font-size:11px;color:var(–t2);margin-top:1px;}
+.cnt-badge{background:var(–s2);border:1px solid var(–border);border-radius:20px;padding:5px 12px;font-size:11px;color:var(–accent);font-weight:600;}
+
+/* filter strip */
+.fstrip{padding:9px 14px;background:var(–bg);border-bottom:1px solid var(–border);flex-shrink:0;}
+.frow{display:flex;gap:7px;overflow-x:auto;scrollbar-width:none;-webkit-overflow-scrolling:touch;}
+.frow::-webkit-scrollbar{display:none;}
+.chip{flex-shrink:0;padding:6px 14px;border-radius:20px;font-size:12px;font-weight:500;cursor:pointer;border:1.5px solid var(–border);background:var(–surface);color:var(–t2);transition:all .18s;white-space:nowrap;}
+.chip.on{background:var(–accent);border-color:var(–accent);color:#0b1520;font-weight:700;}
+
+/* scroll body */
+.sbody{flex:1;overflow-y:auto;-webkit-overflow-scrolling:touch;padding:12px 12px calc(var(–safe-bot) + var(–tbh) + 12px);overscroll-behavior:contain;}
+.sbody::-webkit-scrollbar{display:none;}
+
+/* search & sort */
+.swrap{position:relative;margin-bottom:11px;}
+.swrap .sico{position:absolute;left:13px;top:50%;transform:translateY(-50%);color:var(–t3);pointer-events:none;}
+.sinput{width:100%;background:var(–surface);border:1.5px solid var(–border);border-radius:13px;padding:11px 11px 11px 40px;font-family:‘DM Sans’,sans-serif;font-size:14px;color:var(–text);outline:none;transition:border-color .2s;}
+.sinput::placeholder{color:var(–t3);}
+.sinput:focus{border-color:var(–accent);}
+.srow{display:flex;align-items:center;gap:6px;margin-bottom:13px;}
+.slbl{font-size:10px;color:var(–t3);text-transform:uppercase;letter-spacing:.8px;font-weight:600;flex-shrink:0;}
+.sbtn{font-size:11px;font-family:‘DM Sans’,sans-serif;font-weight:500;padding:5px 10px;border-radius:9px;cursor:pointer;border:1px solid var(–border);background:transparent;color:var(–t2);transition:all .15s;flex-shrink:0;}
+.sbtn.on{color:var(–blue);border-color:var(–blue);}
+
+/* card */
+.card{background:var(–surface);border:1px solid var(–border);border-radius:20px;margin-bottom:11px;overflow:hidden;cursor:pointer;transition:transform .15s,border-color .2s;position:relative;animation:fadeUp .3s ease both;}
+.card:active{transform:scale(.985);}
+.card.faved{border-color:var(–accent);}
+@keyframes fadeUp{from{opacity:0;transform:translateY(14px)}to{opacity:1;transform:translateY(0)}}
+.ctop{height:155px;position:relative;overflow:hidden;background:linear-gradient(135deg,var(–s2) 0%,#15253a 100%);display:flex;align-items:center;justify-content:center;}
+.cemoji{font-size:52px;}
+.cbadge-city{position:absolute;top:11px;left:11px;font-size:10px;font-weight:700;letter-spacing:.5px;text-transform:uppercase;padding:4px 9px;border-radius:8px;background:rgba(11,21,32,.85);color:var(–accent);backdrop-filter:blur(4px);}
+.ctag{position:absolute;top:11px;right:46px;font-size:10px;font-weight:700;letter-spacing:.4px;text-transform:uppercase;padding:4px 9px;border-radius:8px;}
+.ctag.new{background:var(–green);color:#0b1520;}
+.ctag.hot{background:var(–red);color:#fff;}
+.ctag.lowh{background:var(–accent);color:#0b1520;}
+.fbtn{position:absolute;top:9px;right:9px;z-index:5;width:34px;height:34px;border-radius:50%;background:rgba(11,21,32,.82);backdrop-filter:blur(4px);border:none;cursor:pointer;display:flex;align-items:center;justify-content:center;font-size:16px;transition:transform .2s;}
+.fbtn:active{transform:scale(1.4);}
+.cbody{padding:13px 15px 15px;}
+.cprice{font-family:‘Fraunces’,serif;font-size:23px;font-weight:700;color:var(–accent);letter-spacing:-.4px;}
+.caddr{font-size:12px;color:var(–t2);margin:3px 0 10px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+.cspecs{display:flex;gap:14px;margin-bottom:11px;}
+.cspec{display:flex;align-items:center;gap:4px;font-size:13px;font-weight:500;}
+.cpills{display:grid;grid-template-columns:1fr 1fr 1fr;gap:6px;}
+.pill{background:var(–s2);border-radius:11px;padding:7px 5px;text-align:center;}
+.pill .pl{font-size:9px;color:var(–t3);text-transform:uppercase;letter-spacing:.4px;font-weight:600;}
+.pill .pv{font-size:13px;font-weight:700;margin-top:2px;}
+.pv.g{color:var(–green);}
+.pv.y{color:var(–accent);}
+.pv.r{color:var(–red);}
+.costrip{display:flex;gap:5px;margin-top:8px;}
+.cotag{flex:1;border-radius:7px;padding:5px 0;text-align:center;font-size:10px;font-weight:600;border:1px solid;}
+.cotag span{display:block;font-size:12px;font-weight:700;}
+
+/* map */
+#map-container{flex:1;position:relative;}
+#map{width:100%;height:100%;}
+.leaflet-popup-content-wrapper{background:var(–s2);border:1px solid var(–border);border-radius:14px;color:var(–text);font-family:‘DM Sans’,sans-serif;box-shadow:0 8px 32px rgba(0,0,0,.5);}
+.leaflet-popup-tip{background:var(–s2);}
+.leaflet-popup-content{margin:11px 13px;min-width:175px;}
+.lp-price{font-family:‘Fraunces’,serif;font-size:17px;color:var(–accent);font-weight:700;}
+.lp-addr{font-size:11px;color:var(–t2);margin:2px 0 7px;}
+.lp-specs{font-size:12px;color:var(–text);margin-bottom:7px;}
+.lp-btn{display:block;text-align:center;padding:8px;border-radius:10px;background:var(–accent);color:#0b1520;font-weight:700;font-size:12px;border:none;cursor:pointer;width:100%;font-family:‘DM Sans’,sans-serif;}
+.map-toggles{position:absolute;bottom:calc(var(–safe-bot) + var(–tbh) + 12px);left:50%;transform:translateX(-50%);display:flex;gap:5px;z-index:1000;background:rgba(11,21,32,.92);border:1px solid var(–border);border-radius:20px;padding:5px;backdrop-filter:blur(8px);}
+.mtgl{padding:6px 13px;border-radius:14px;border:none;cursor:pointer;font-size:11px;font-weight:600;font-family:‘DM Sans’,sans-serif;background:transparent;color:var(–t2);transition:all .18s;}
+.mtgl.on{background:var(–s2);color:var(–accent);}
+
+/* favs */
+.favhero{padding:18px 16px 4px;font-family:‘Fraunces’,serif;font-size:24px;font-weight:700;font-style:italic;color:var(–text);}
+.no-favs{padding:55px 22px;text-align:center;color:var(–t2);}
+.no-favs .nfi{font-size:48px;margin-bottom:14px;}
+.no-favs h3{font-family:‘Fraunces’,serif;font-size:19px;color:var(–text);margin-bottom:6px;}
+.no-favs p{font-size:13px;line-height:1.6;}
+
+/* modal */
+.moverlay{position:fixed;inset:0;z-index:500;background:rgba(0,0,0,.65);backdrop-filter:blur(5px);display:flex;align-items:flex-end;opacity:0;visibility:hidden;transition:opacity .2s;}
+.moverlay.open{opacity:1;visibility:visible;}
+.msheet{width:100%;max-height:92dvh;background:var(–surface);border-radius:24px 24px 0 0;overflow-y:auto;-webkit-overflow-scrolling:touch;padding-bottom:calc(var(–safe-bot) + 18px);transform:translateY(100%);transition:transform .32s cubic-bezier(.34,1.4,.64,1);}
+.moverlay.open .msheet{transform:translateY(0);}
+.mhandle{width:36px;height:4px;background:var(–border);border-radius:2px;margin:11px auto 0;}
+.mimg{height:190px;background:linear-gradient(135deg,var(–s2) 0%,#15253a 100%);display:flex;align-items:center;justify-content:center;font-size:68px;margin-top:7px;}
+.mbody{padding:16px 17px 6px;}
+.mprice{font-family:‘Fraunces’,serif;font-size:27px;font-weight:700;color:var(–accent);}
+.maddr{font-size:13px;color:var(–t2);margin:4px 0 13px;}
+.mspecs{display:flex;gap:16px;margin-bottom:15px;}
+.mspec{font-size:14px;font-weight:600;}
+.mspec small{font-size:11px;color:var(–t2);font-weight:400;}
+.msec{margin-bottom:18px;}
+.mstitle{font-size:10px;text-transform:uppercase;letter-spacing:1px;color:var(–t3);font-weight:700;margin-bottom:9px;display:flex;align-items:center;gap:6px;}
+.mstitle::after{content:’’;flex:1;height:1px;background:var(–border);}
+.mgrid2{display:grid;grid-template-columns:1fr 1fr;gap:7px;}
+.mcell{background:var(–s2);border-radius:11px;padding:9px 11px;}
+.mcell .mcl{font-size:9px;color:var(–t3);text-transform:uppercase;letter-spacing:.4px;font-weight:600;}
+.mcell .mcv{font-size:13px;font-weight:700;margin-top:3px;}
+.mcv.g{color:var(–green);}
+.mcv.y{color:var(–accent);}
+.mcv.r{color:var(–red);}
+/* commute bars */
+.cbar{margin-bottom:9px;}
+.cbartop{display:flex;justify-content:space-between;font-size:12px;margin-bottom:3px;}
+.cbartop .cname{color:var(–t2);}
+.cbartop .cval{font-weight:700;}
+.ctrack{height:7px;border-radius:4px;background:var(–s2);overflow:hidden;}
+.cfill{height:100%;border-radius:4px;transition:width .7s cubic-bezier(.4,0,.2,1);}
+/* ext links */
+.extbtns{display:flex;gap:7px;}
+.extbtn{flex:1;text-align:center;padding:12px 7px;border-radius:13px;font-size:12px;font-weight:700;text-decoration:none;display:block;transition:opacity .15s;}
+.extbtn:active{opacity:.75;}
+.extbtn.z{background:#006aff;color:#fff;}
+.extbtn.rf{background:#cc1f29;color:#fff;}
+.extbtn.mp{background:var(–s2);color:var(–text);border:1px solid var(–border);}
+
+/* live search */
+.lvbody{padding:14px;}
+.lvtitle{font-family:‘Fraunces’,serif;font-size:21px;font-weight:600;font-style:italic;color:var(–text);margin-bottom:3px;}
+.lvsub{font-size:12px;color:var(–t2);margin-bottom:15px;line-height:1.5;}
+.lkcard{background:var(–surface);border:1px solid var(–border);border-radius:15px;padding:13px 15px;margin-bottom:9px;}
+.lkcard h4{font-size:14px;font-weight:600;margin-bottom:3px;}
+.lkcard p{font-size:11px;color:var(–t2);margin-bottom:9px;line-height:1.5;}
+.lkbtns{display:flex;gap:7px;flex-wrap:wrap;}
+.lkbtn{flex:1;padding:10px 7px;border-radius:11px;font-size:12px;font-weight:700;text-align:center;text-decoration:none;display:block;transition:opacity .15s;min-width:calc(33% - 5px);}
+.lkbtn:active{opacity:.8;}
+.lkbtn.z{background:#006aff;color:#fff;}
+.lkbtn.r{background:#cc1f29;color:#fff;}
+.lkbtn.g{background:#006431;color:#fff;}
+.critcard{background:var(–s2);border-radius:13px;padding:13px 15px;margin-bottom:14px;border:1px solid var(–border);}
+.critcard h4{font-size:10px;text-transform:uppercase;letter-spacing:.8px;color:var(–t3);margin-bottom:9px;font-weight:700;}
+.crit{display:flex;align-items:center;gap:8px;padding:5px 0;border-bottom:1px solid var(–border);}
+.crit:last-child{border:none;}
+.crit .ci{font-size:14px;}
+.crit .ct{font-size:13px;}
+.crit .cv{margin-left:auto;font-size:12px;font-weight:600;color:var(–accent);}
+
+/* tab bar */
+.tabbar{position:fixed;bottom:0;left:0;right:0;z-index:200;height:calc(var(–tbh) + var(–safe-bot));padding:8px 0 var(–safe-bot);background:rgba(11,21,32,.97);backdrop-filter:blur(20px);border-top:1px solid var(–border);display:flex;justify-content:space-around;align-items:flex-start;}
+.tbbtn{display:flex;flex-direction:column;align-items:center;gap:3px;background:none;border:none;cursor:pointer;font-size:10px;font-weight:500;font-family:‘DM Sans’,sans-serif;color:var(–t3);padding:4px 16px;border-radius:11px;transition:color .2s;position:relative;}
+.tbbtn.on{color:var(–accent);}
+.tbbtn svg{width:22px;height:22px;}
+.tdot{position:absolute;top:2px;right:11px;width:7px;height:7px;border-radius:50%;background:var(–accent);display:none;}
+.tdot.show{display:block;}
+</style>
+
+</head>
+<body>
+
+<!-- LISTINGS -->
+
+<div class="view active" id="view-listings">
+  <div class="hdr">
+    <div class="hdr-row">
+      <div><h1>Eastside Homes</h1><div class="hdr-sub">Bellevue · Redmond · Kirkland</div></div>
+      <div class="cnt-badge" id="cnt">— homes</div>
+    </div>
+  </div>
+  <div class="fstrip">
+    <div class="frow" id="city-f">
+      <div class="chip on" data-v="all">All</div>
+      <div class="chip" data-v="Bellevue">Bellevue</div>
+      <div class="chip" data-v="Redmond">Redmond</div>
+      <div class="chip" data-v="Kirkland">Kirkland</div>
+    </div>
+  </div>
+  <div class="sbody">
+    <div class="swrap">
+      <svg class="sico" width="15" height="15" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
+      <input class="sinput" id="sq" placeholder="Search address or neighborhood…">
+    </div>
+    <div class="srow">
+      <span class="slbl">Sort</span>
+      <button class="sbtn on" data-s="price">Price ↑</button>
+      <button class="sbtn" data-s="school">Schools ↓</button>
+      <button class="sbtn" data-s="commute">Commute</button>
+      <button class="sbtn" data-s="hoa">Low HOA</button>
+    </div>
+    <div id="cards"></div>
+  </div>
+</div>
+
+<!-- MAP -->
+
+<div class="view" id="view-map">
+  <div class="hdr">
+    <div class="hdr-row">
+      <div><h1>Map View</h1><div class="hdr-sub">Tap a pin to view details</div></div>
+      <div class="cnt-badge" id="mapcnt">— homes</div>
+    </div>
+  </div>
+  <div id="map-container">
+    <div id="map"></div>
+    <div class="map-toggles">
+      <button class="mtgl on" id="mt-homes" onclick="mt('homes')">🏠 Homes</button>
+      <button class="mtgl" id="mt-campus" onclick="mt('campus')">🏢 Campuses</button>
+      <button class="mtgl" id="mt-schools" onclick="mt('schools')">🎓 Schools</button>
+    </div>
+  </div>
+</div>
+
+<!-- FAVS -->
+
+<div class="view" id="view-favs">
+  <div class="hdr">
+    <div class="hdr-row">
+      <div><h1>Saved Homes</h1><div class="hdr-sub">Your shortlist</div></div>
+      <div class="cnt-badge" id="favcnt">0 saved</div>
+    </div>
+  </div>
+  <div class="sbody"><div id="favcards"></div></div>
+</div>
+
+<!-- LIVE SEARCH -->
+
+<div class="view" id="view-search">
+  <div class="hdr">
+    <div class="hdr-row">
+      <div><h1>Live Search</h1><div class="hdr-sub">Zillow &amp; Redfin with your criteria</div></div>
+    </div>
+  </div>
+  <div class="sbody lvbody">
+    <div class="critcard">
+      <h4>Your Criteria</h4>
+      <div class="crit"><span class="ci">🛏</span><span class="ct">Bedrooms</span><span class="cv">3+ beds</span></div>
+      <div class="crit"><span class="ci">🚿</span><span class="ct">Bathrooms</span><span class="cv">2+ baths</span></div>
+      <div class="crit"><span class="ci">💰</span><span class="ct">Max Price</span><span class="cv">$1,500,000</span></div>
+      <div class="crit"><span class="ci">🏘</span><span class="ct">Cities</span><span class="cv">Bellevue · Redmond · Kirkland</span></div>
+      <div class="crit"><span class="ci">🎓</span><span class="ct">Schools</span><span class="cv">Top rated</span></div>
+      <div class="crit"><span class="ci">🏦</span><span class="ct">HOA</span><span class="cv">Low / None</span></div>
+    </div>
+
+```
+<div class="lkcard">
+  <h4>🏠 Zillow — 3+bd, 2+ba, &lt;$1.5M, Low HOA</h4>
+  <p>Pre-filtered links open directly in Zillow with your criteria applied.</p>
+  <div class="lkbtns">
+    <a href="https://www.zillow.com/bellevue-wa/?searchQueryState=%7B%22filterState%22%3A%7B%22beds%22%3A%7B%22min%22%3A3%7D%2C%22baths%22%3A%7B%22min%22%3A2%7D%2C%22price%22%3A%7B%22max%22%3A1500000%7D%2C%22hoa%22%3A%7B%22max%22%3A300%7D%7D%7D" target="_blank" class="lkbtn z">Bellevue</a>
+    <a href="https://www.zillow.com/redmond-wa/?searchQueryState=%7B%22filterState%22%3A%7B%22beds%22%3A%7B%22min%22%3A3%7D%2C%22baths%22%3A%7B%22min%22%3A2%7D%2C%22price%22%3A%7B%22max%22%3A1500000%7D%2C%22hoa%22%3A%7B%22max%22%3A300%7D%7D%7D" target="_blank" class="lkbtn z">Redmond</a>
+    <a href="https://www.zillow.com/kirkland-wa/?searchQueryState=%7B%22filterState%22%3A%7B%22beds%22%3A%7B%22min%22%3A3%7D%2C%22baths%22%3A%7B%22min%22%3A2%7D%2C%22price%22%3A%7B%22max%22%3A1500000%7D%2C%22hoa%22%3A%7B%22max%22%3A300%7D%7D%7D" target="_blank" class="lkbtn z">Kirkland</a>
+  </div>
+</div>
+
+<div class="lkcard">
+  <h4>🔴 Redfin — 3+bd, 2+ba, &lt;$1.5M</h4>
+  <p>Pre-filtered Redfin links for each city.</p>
+  <div class="lkbtns">
+    <a href="https://www.redfin.com/city/1703/WA/Bellevue/filter/min-beds=3,min-baths=2,max-price=1500000" target="_blank" class="lkbtn r">Bellevue</a>
+    <a href="https://www.redfin.com/city/17040/WA/Redmond/filter/min-beds=3,min-baths=2,max-price=1500000" target="_blank" class="lkbtn r">Redmond</a>
+    <a href="https://www.redfin.com/city/10518/WA/Kirkland/filter/min-beds=3,min-baths=2,max-price=1500000" target="_blank" class="lkbtn r">Kirkland</a>
+  </div>
+</div>
+
+<div class="lkcard">
+  <h4>🎓 School Ratings</h4>
+  <p>Check GreatSchools ratings for any address. Bellevue SD and Lake Washington SD are among the top in WA.</p>
+  <div class="lkbtns">
+    <a href="https://www.greatschools.org/washington/bellevue/" target="_blank" class="lkbtn z">Bellevue SD</a>
+    <a href="https://www.greatschools.org/washington/redmond/" target="_blank" class="lkbtn g">LW SD</a>
+    <a href="https://www.greatschools.org/washington/kirkland/" target="_blank" class="lkbtn g">Kirkland</a>
+  </div>
+</div>
+
+<div class="lkcard">
+  <h4>🏢 Tech Campus Directions</h4>
+  <p>Tap to get driving directions to major tech offices from Apple Maps.</p>
+  <div class="lkbtns">
+    <a href="https://maps.apple.com/?daddr=Microsoft+Redmond+Campus,+Redmond,+WA" target="_blank" class="lkbtn z">🏢 Microsoft</a>
+    <a href="https://maps.apple.com/?daddr=Amazon+HQ2,+Bellevue,+WA" target="_blank" class="lkbtn r">📦 Amazon</a>
+  </div>
+  <div class="lkbtns" style="margin-top:7px">
+    <a href="https://maps.apple.com/?daddr=Google+Kirkland+Campus" target="_blank" class="lkbtn g">🔍 Google</a>
+    <a href="https://maps.apple.com/?daddr=Meta+Bellevue+Office,+Bellevue+WA" target="_blank" class="lkbtn r">👤 Meta</a>
+  </div>
+</div>
+```
+
+  </div>
+</div>
+
+<!-- TAB BAR -->
+
+<div class="tabbar">
+  <button class="tbbtn on" id="tb-listings" onclick="sv('listings')">
+    <svg fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.8"><rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/></svg>
+    Homes
+  </button>
+  <button class="tbbtn" id="tb-map" onclick="sv('map')">
+    <svg fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.8"><polygon points="1 6 1 22 8 18 16 22 23 18 23 2 16 6 8 2 1 6"/><line x1="8" y1="2" x2="8" y2="18"/><line x1="16" y1="6" x2="16" y2="22"/></svg>
+    Map
+  </button>
+  <button class="tbbtn" id="tb-favs" onclick="sv('favs')">
+    <svg fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.8"><path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/></svg>
+    Saved
+    <div class="tdot" id="fdot"></div>
+  </button>
+  <button class="tbbtn" id="tb-search" onclick="sv('search')">
+    <svg fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.8"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
+    Search
+  </button>
+</div>
+
+<!-- MODAL -->
+
+<div class="moverlay" id="moverlay" onclick="mclose(event)">
+  <div class="msheet" id="msheet"><div class="mhandle"></div><div id="minner"></div></div>
+</div>
+
+<script>
+// ── DATA ──────────────────────────────────────────────────────────────
+const D = [
+  {id:1,city:"Bellevue",nb:"Crossroads",em:"🏡",addr:"4823 NE 24th St",fa:"4823 NE 24th St, Bellevue WA 98007",price:1295000,beds:4,baths:2.5,sqft:2280,hoa:0,yr:1998,lat:47.6015,lng:-122.1430,badge:"Low HOA",sd:"Bellevue SD",sr:9,gs:"https://www.greatschools.org/washington/bellevue/",co:{ms:8,az:24,gg:18,mt:22},desc:"Spacious craftsman on a quiet cul-de-sac. Hardwoods, updated quartz kitchen, large backyard with deck. Minutes to I-90 and Crossroads Park.",zil:"https://www.zillow.com/homes/for_sale/Bellevue-WA/",red:"https://www.redfin.com/city/1703/WA/Bellevue",map:"https://maps.apple.com/?address=4823+NE+24th+St,+Bellevue,+WA"},
+  {id:2,city:"Redmond",nb:"Education Hill",em:"🏘",addr:"16720 Avondale Rd NE",fa:"16720 Avondale Rd NE, Redmond WA 98052",price:1185000,beds:3,baths:2,sqft:1950,hoa:85,yr:2003,lat:47.6810,lng:-122.1270,badge:"New",sd:"Lake Washington SD",sr:10,gs:"https://www.greatschools.org/washington/redmond/",co:{ms:4,az:30,gg:8,mt:35},desc:"Modern split-level on Education Hill. Open floor plan, vaulted ceilings, chef's kitchen. Walking distance to Redmond Town Center. LWSD — WA's top-rated district.",zil:"https://www.zillow.com/homes/for_sale/Redmond-WA/",red:"https://www.redfin.com/city/17040/WA/Redmond",map:"https://maps.apple.com/?address=16720+Avondale+Rd+NE,+Redmond,+WA"},
+  {id:3,city:"Kirkland",nb:"Juanita",em:"🏠",addr:"11428 NE 68th Pl",fa:"11428 NE 68th Pl, Kirkland WA 98033",price:998000,beds:3,baths:2,sqft:1740,hoa:120,yr:1995,lat:47.7090,lng:-122.2040,badge:null,sd:"Lake Washington SD",sr:9,gs:"https://www.greatschools.org/washington/kirkland/",co:{ms:14,az:25,gg:12,mt:30},desc:"Fully updated rancher in Juanita — new roof, HVAC, LVP floors (2021). Flat yard, 3 blocks from Juanita Beach Park.",zil:"https://www.zillow.com/homes/for_sale/Kirkland-WA/",red:"https://www.redfin.com/city/10518/WA/Kirkland",map:"https://maps.apple.com/?address=11428+NE+68th+Pl,+Kirkland,+WA"},
+  {id:4,city:"Bellevue",nb:"Somerset",em:"🏡",addr:"2340 SE 22nd St",fa:"2340 SE 22nd St, Bellevue WA 98005",price:1475000,beds:4,baths:3,sqft:2650,hoa:200,yr:2001,lat:47.5640,lng:-122.1370,badge:"Hot",sd:"Bellevue SD",sr:10,gs:"https://www.greatschools.org/washington/bellevue/",co:{ms:12,az:18,gg:14,mt:20},desc:"Stunning Somerset Hills home with Seattle skyline views. Soaring ceilings, stone fireplace. Newport HS — among WA's top-ranked schools.",zil:"https://www.zillow.com/homes/for_sale/Bellevue-WA/",red:"https://www.redfin.com/city/1703/WA/Bellevue",map:"https://maps.apple.com/?address=2340+SE+22nd+St,+Bellevue,+WA"},
+  {id:5,city:"Redmond",nb:"Redmond Ridge",em:"🏘",addr:"8956 208th Ave NE",fa:"8956 208th Ave NE, Redmond WA 98053",price:1050000,beds:3,baths:2.5,sqft:2100,hoa:145,yr:2008,lat:47.6580,lng:-122.0180,badge:null,sd:"Lake Washington SD",sr:9,gs:"https://www.greatschools.org/washington/redmond/",co:{ms:9,az:35,gg:13,mt:40},desc:"Contemporary home in Redmond Ridge. Gourmet kitchen, 3-car garage, community pool & trails. Very family-friendly community.",zil:"https://www.zillow.com/homes/for_sale/Redmond-WA/",red:"https://www.redfin.com/city/17040/WA/Redmond",map:"https://maps.apple.com/?address=8956+208th+Ave+NE,+Redmond,+WA"},
+  {id:6,city:"Kirkland",nb:"Totem Lake",em:"🏠",addr:"6812 116th Ave NE",fa:"6812 116th Ave NE, Kirkland WA 98034",price:1199000,beds:4,baths:2.5,sqft:2220,hoa:0,yr:1990,lat:47.7215,lng:-122.1860,badge:"Low HOA",sd:"Lake Washington SD",sr:9,gs:"https://www.greatschools.org/washington/kirkland/",co:{ms:15,az:20,gg:10,mt:25},desc:"Spacious 4-bed with no HOA. Large backyard, RV parking, bonus room. Totem Lake Village 0.5mi for dining & shopping.",zil:"https://www.zillow.com/homes/for_sale/Kirkland-WA/",red:"https://www.redfin.com/city/10518/WA/Kirkland",map:"https://maps.apple.com/?address=6812+116th+Ave+NE,+Kirkland,+WA"},
+  {id:7,city:"Bellevue",nb:"Lake Hills",em:"🏡",addr:"1430 148th Ave SE",fa:"1430 148th Ave SE, Bellevue WA 98007",price:1125000,beds:3,baths:2,sqft:1900,hoa:35,yr:1985,lat:47.5890,lng:-122.1450,badge:"Low HOA",sd:"Bellevue SD",sr:8,gs:"https://www.greatschools.org/washington/bellevue/",co:{ms:10,az:20,gg:12,mt:24},desc:"Updated mid-century in Lake Hills. New kitchen, baths, roof (2022). Large fenced yard, 2-car garage. Tiny HOA covers lake access.",zil:"https://www.zillow.com/homes/for_sale/Bellevue-WA/",red:"https://www.redfin.com/city/1703/WA/Bellevue",map:"https://maps.apple.com/?address=1430+148th+Ave+SE,+Bellevue,+WA"},
+  {id:8,city:"Redmond",nb:"Union Hill",em:"🏡",addr:"22310 NE 100th St",fa:"22310 NE 100th St, Redmond WA 98053",price:1399000,beds:4,baths:3,sqft:2900,hoa:0,yr:2015,lat:47.6720,lng:-122.0420,badge:"New",sd:"Lake Washington SD",sr:10,gs:"https://www.greatschools.org/washington/redmond/",co:{ms:11,az:38,gg:15,mt:42},desc:"Newer construction on Union Hill with Cascade mountain views. Wide-plank hardwoods, 10ft ceilings, EV charger. No HOA. LWSD #1 district in WA.",zil:"https://www.zillow.com/homes/for_sale/Redmond-WA/",red:"https://www.redfin.com/city/17040/WA/Redmond",map:"https://maps.apple.com/?address=22310+NE+100th+St,+Redmond,+WA"},
+];
+const CAMPUS=[
+  {n:"Microsoft",lat:47.6423,lng:-122.1391,e:"🏢",c:"#5ba3e8"},
+  {n:"Amazon HQ",lat:47.6225,lng:-122.3368,e:"📦",c:"#e8a83e"},
+  {n:"Google Kirkland",lat:47.6703,lng:-122.1958,e:"🔍",c:"#4ecb8d"},
+  {n:"Meta Bellevue",lat:47.6149,lng:-122.1939,e:"👤",c:"#e87575"},
+];
+const SCHOOLS=[
+  {n:"Rosa Parks Elem (10/10)",lat:47.6792,lng:-122.1207},
+  {n:"Newport HS (10/10)",lat:47.5603,lng:-122.1373},
+  {n:"Eastlake HS (9/10)",lat:47.6472,lng:-122.0391},
+  {n:"Juanita HS (9/10)",lat:47.7089,lng:-122.1923},
+  {n:"Bellevue HS (9/10)",lat:47.6104,lng:-122.1720},
+];
+
+// ── STATE ──────────────────────────────────────────────────────────────
+let favs=JSON.parse(localStorage.getItem('eh3_f')||'[]');
+let cf='all',sf='price',sq='',cv='listings';
+let mapInit=false,lmap=null,hm=[],cm=[],sm=[],showC=false,showS=false;
+
+// ── UTILS ──────────────────────────────────────────────────────────────
+const pf=p=>p>=1e6?'$'+(p/1e6).toFixed(3).replace(/\.?0+$/,'')+'M':'$'+(p/1e3).toFixed(0)+'K';
+const hf=h=>h===0?'None ✓':'$'+h+'/mo';
+const hc=h=>h===0?'g':h<150?'y':'r';
+const cc=m=>m<=10?'#4ecb8d':m<=20?'#c8a96e':'#e87575';
+const cl=m=>m<=10?'Excellent':m<=20?'Good':m<=30?'Fair':'Long';
+const stars=r=>{const f=Math.round(r/2);return Array.from({length:5},(_,i)=>`<span style="color:${i<f?'#c8a96e':'#243a52'}">★</span>`).join('');};
+const fd=()=>{
+  let d=[...D];
+  if(cf!=='all')d=d.filter(l=>l.city===cf);
+  if(sq){const q=sq.toLowerCase();d=d.filter(l=>l.addr.toLowerCase().includes(q)||l.nb.toLowerCase().includes(q)||l.city.toLowerCase().includes(q));}
+  if(sf==='price')d.sort((a,b)=>a.price-b.price);
+  else if(sf==='school')d.sort((a,b)=>b.sr-a.sr);
+  else if(sf==='commute')d.sort((a,b)=>a.co.ms-b.co.ms);
+  else if(sf==='hoa')d.sort((a,b)=>a.hoa-b.hoa);
+  return d;
+};
+
+// ── RENDER CARD ──────────────────────────────────────────────────────
+function cHTML(l,i=0){
+  const fv=favs.includes(l.id);
+  const bh=l.badge?`<span class="ctag ${l.badge==='New'?'new':l.badge==='Hot'?'hot':'lowh'}">${l.badge}</span>`:'';
+  const co=l.co;
+  const costags=[{n:'MSFT',v:co.ms},{n:'AMZN',v:co.az},{n:'GOOG',v:co.gg},{n:'META',v:co.mt}].map(c=>`<div class="cotag" style="color:${cc(c.v)};border-color:${cc(c.v)}40;background:${cc(c.v)}12">${c.n}<span>${c.v}m</span></div>`).join('');
+  return `<div class="card ${fv?'faved':''}" onclick="od(${l.id})" style="animation-delay:${i*35}ms">
+    <div class="ctop"><div class="cemoji">${l.em}</div><span class="cbadge-city">${l.city}</span>${bh}<button class="fbtn" onclick="tf(event,${l.id})">${fv?'❤️':'🤍'}</button></div>
+    <div class="cbody">
+      <div class="cprice">${pf(l.price)}</div>
+      <div class="caddr">${l.addr}, ${l.nb}</div>
+      <div class="cspecs"><div class="cspec">🛏 ${l.beds}</div><div class="cspec">🚿 ${l.baths}</div><div class="cspec">📐 ${l.sqft.toLocaleString()}</div></div>
+      <div class="cpills">
+        <div class="pill"><div class="pl">Schools</div><div class="pv g">${l.sr}/10</div></div>
+        <div class="pill"><div class="pl">HOA</div><div class="pv ${hc(l.hoa)}">${l.hoa===0?'None':'$'+l.hoa}</div></div>
+        <div class="pill"><div class="pl">MSFT</div><div class="pv" style="color:${cc(l.co.ms)}">${l.co.ms}m</div></div>
+      </div>
+      <div class="costrip">${costags}</div>
+    </div>
+  </div>`;
+}
+
+function rc(){
+  const data=fd();
+  document.getElementById('cnt').textContent=data.length+' home'+(data.length!==1?'s':'');
+  document.getElementById('mapcnt').textContent=data.length+' home'+(data.length!==1?'s':'');
+  document.getElementById('cards').innerHTML=data.length?data.map((l,i)=>cHTML(l,i)).join(''):`<div style="text-align:center;padding:55px 20px;color:var(--t2)"><div style="font-size:44px;margin-bottom:10px">🔍</div><div style="font-family:Fraunces,serif;font-size:19px;color:var(--text);margin-bottom:5px">No matches</div><div style="font-size:13px">Try a different filter</div></div>`;
+}
+function rf(){
+  const data=D.filter(l=>favs.includes(l.id));
+  document.getElementById('favcnt').textContent=data.length+' saved';
+  document.getElementById('fdot').classList.toggle('show',data.length>0);
+  document.getElementById('favcards').innerHTML=data.length?data.map((l,i)=>cHTML(l,i)).join(''):`<div class="no-favs"><div class="nfi">🤍</div><h3>No saved homes yet</h3><p>Tap the heart icon on any listing<br>to save it here.</p></div>`;
+}
+
+// ── FAV TOGGLE ──────────────────────────────────────────────────────
+function tf(e,id){
+  e.stopPropagation();
+  favs=favs.includes(id)?favs.filter(x=>x!==id):[...favs,id];
+  localStorage.setItem('eh3_f',JSON.stringify(favs));
+  rc();rf();
+  const mb=document.getElementById('mfavbtn');
+  if(mb&&parseInt(mb.dataset.id)===id)mb.textContent=favs.includes(id)?'❤️':'🤍';
+}
+
+// ── DETAIL MODAL ──────────────────────────────────────────────────────
+function od(id){
+  const l=D.find(x=>x.id===id);if(!l)return;
+  const fv=favs.includes(id);
+  const cbars=[{n:'🏢 Microsoft',v:l.co.ms},{n:'📦 Amazon',v:l.co.az},{n:'🔍 Google',v:l.co.gg},{n:'👤 Meta',v:l.co.mt}].map(c=>{
+    const p=Math.min(100,(c.v/45)*100);
+    return `<div class="cbar"><div class="cbartop"><span class="cname">${c.n}</span><span class="cval" style="color:${cc(c.v)}">${c.v} min · ${cl(c.v)}</span></div><div class="ctrack"><div class="cfill" style="width:0%;background:${cc(c.v)}" data-w="${p}"></div></div></div>`;
+  }).join('');
+  document.getElementById('minner').innerHTML=`
+    <div class="mimg">${l.em}</div>
+    <div class="mbody">
+      <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:10px">
+        <div><div class="mprice">${pf(l.price)}</div><div class="maddr">${l.fa}</div></div>
+        <button id="mfavbtn" data-id="${id}" onclick="tf(event,${id})" style="background:none;border:none;font-size:28px;cursor:pointer;flex-shrink:0;padding:3px">${fv?'❤️':'🤍'}</button>
+      </div>
+      <div class="mspecs">
+        <div class="mspec">🛏 ${l.beds} <small>beds</small></div>
+        <div class="mspec">🚿 ${l.baths} <small>baths</small></div>
+        <div class="mspec">📐 ${l.sqft.toLocaleString()} <small>sqft</small></div>
+        <div class="mspec">🏗 ${l.yr}</div>
+      </div>
+      <div class="msec">
+        <div class="mstitle">Details</div>
+        <div class="mgrid2">
+          <div class="mcell"><div class="mcl">HOA / mo</div><div class="mcv ${hc(l.hoa)}">${hf(l.hoa)}</div></div>
+          <div class="mcell"><div class="mcl">$/sqft</div><div class="mcv y">$${Math.round(l.price/l.sqft)}</div></div>
+          <div class="mcell"><div class="mcl">Neighborhood</div><div class="mcv">${l.nb}</div></div>
+          <div class="mcell"><div class="mcl">Year Built</div><div class="mcv">${l.yr}</div></div>
+        </div>
+      </div>
+      <div class="msec">
+        <div class="mstitle">🎓 School District</div>
+        <div class="mcell" style="margin-bottom:7px"><div class="mcl">District</div><div class="mcv" style="font-size:13px">${l.sd}</div></div>
+        <div class="mcell">
+          <div class="mcl">Rating</div>
+          <div style="display:flex;align-items:center;gap:10px;margin-top:4px">
+            <div style="font-size:18px">${stars(l.sr)}</div>
+            <div class="mcv g" style="font-size:17px">${l.sr}/10</div>
+          </div>
+        </div>
+        <a href="${l.gs}" target="_blank" style="display:block;margin-top:7px;text-align:center;padding:10px;border-radius:11px;background:var(--s2);color:var(--blue);font-size:12px;font-weight:600;text-decoration:none;border:1px solid var(--border)">View on GreatSchools →</a>
+      </div>
+      <div class="msec">
+        <div class="mstitle">🚗 Commute to Tech Campuses</div>
+        ${cbars}
+      </div>
+      <div class="msec">
+        <div class="mstitle">About</div>
+        <p style="font-size:13px;color:var(--t2);line-height:1.65">${l.desc}</p>
+      </div>
+      <div class="msec">
+        <div class="mstitle">View Listing</div>
+        <div class="extbtns">
+          <a href="${l.zil}" target="_blank" class="extbtn z">🏠 Zillow</a>
+          <a href="${l.red}" target="_blank" class="extbtn rf">🔴 Redfin</a>
+          <a href="${l.map}" target="_blank" class="extbtn mp">🗺 Map</a>
+        </div>
+      </div>
+    </div>`;
+  document.getElementById('moverlay').classList.add('open');
+  requestAnimationFrame(()=>setTimeout(()=>{document.querySelectorAll('.cfill').forEach(b=>{b.style.width=b.dataset.w+'%';});},80));
+}
+function mclose(e){if(e.target===document.getElementById('moverlay'))document.getElementById('moverlay').classList.remove('open');}
+
+// ── MAP ──────────────────────────────────────────────────────────────
+function initMap(){
+  if(mapInit)return;mapInit=true;
+  lmap=L.map('map',{zoomControl:false}).setView([47.655,-122.155],12);
+  L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png',{attribution:'© OpenStreetMap © CARTO',maxZoom:18}).addTo(lmap);
+  L.control.zoom({position:'topright'}).addTo(lmap);
+  D.forEach(l=>{
+    const fv=favs.includes(l.id);
+    const ico=L.divIcon({html:`<div style="background:${fv?'#c8a96e':'#192840'};border:2px solid ${fv?'#c8a96e':'#5ba3e8'};border-radius:50% 50% 50% 0;transform:rotate(-45deg);width:28px;height:28px;display:flex;align-items:center;justify-content:center;box-shadow:0 2px 8px rgba(0,0,0,.5)"><span style="transform:rotate(45deg);font-size:13px">${l.em}</span></div>`,iconSize:[28,28],iconAnchor:[14,28],popupAnchor:[0,-30],className:''});
+    const m=L.marker([l.lat,l.lng],{icon:ico}).addTo(lmap);
+    m.bindPopup(`<div class="lp-price">${pf(l.price)}</div><div class="lp-addr">${l.addr}, ${l.city}</div><div class="lp-specs">🛏 ${l.beds} · 🚿 ${l.baths} · 📐 ${l.sqft.toLocaleString()}</div><div style="font-size:11px;color:#6d8fad;margin-bottom:8px">🎓 ${l.sr}/10 · HOA: ${hf(l.hoa)} · MSFT: ${l.co.ms}min</div><button class="lp-btn" onclick="od(${l.id})">View Details</button>`,{maxWidth:220});
+    hm.push(m);
+  });
+  CAMPUS.forEach(c=>{
+    const ico=L.divIcon({html:`<div style="background:#0b1520;border:2px solid ${c.c};border-radius:8px;padding:3px 8px;font-size:10px;font-weight:700;color:${c.c};white-space:nowrap;font-family:'DM Sans',sans-serif">${c.e} ${c.n}</div>`,className:'',iconAnchor:[0,16]});
+    cm.push(L.marker([c.lat,c.lng],{icon:ico}));
+  });
+  SCHOOLS.forEach(s=>{
+    const ico=L.divIcon({html:`<div style="background:#0b1520;border:1.5px solid #4ecb8d;border-radius:7px;padding:3px 7px;font-size:10px;color:#4ecb8d;font-weight:700;white-space:nowrap;font-family:'DM Sans',sans-serif">🎓 ${s.n}</div>`,className:'',iconAnchor:[0,16]});
+    sm.push(L.marker([s.lat,s.lng],{icon:ico}));
+  });
+}
+function mt(t){
+  if(t==='campus'){showC=!showC;document.getElementById('mt-campus').classList.toggle('on',showC);cm.forEach(m=>showC?m.addTo(lmap):lmap.removeLayer(m));}
+  else if(t==='schools'){showS=!showS;document.getElementById('mt-schools').classList.toggle('on',showS);sm.forEach(m=>showS?m.addTo(lmap):lmap.removeLayer(m));}
+  else{lmap.setView([47.655,-122.155],12);}
+}
+
+// ── VIEW SWITCHING ──────────────────────────────────────────────────
+const VIEWS=['listings','map','favs','search'];
+function sv(v){
+  cv=v;
+  VIEWS.forEach(id=>{
+    document.getElementById('view-'+id).classList.toggle('active',id===v);
+    const tb=document.getElementById('tb-'+id);
+    if(tb)tb.classList.toggle('on',id===v);
+  });
+  if(v==='map'){initMap();setTimeout(()=>lmap&&lmap.invalidateSize(),120);}
+  if(v==='favs')rf();
+}
+
+// ── FILTER/SORT/SEARCH ──────────────────────────────────────────────
+document.querySelectorAll('[data-v]').forEach(el=>el.addEventListener('click',()=>{cf=el.dataset.v;document.querySelectorAll('[data-v]').forEach(c=>c.classList.toggle('on',c===el));rc();}));
+document.querySelectorAll('[data-s]').forEach(el=>el.addEventListener('click',()=>{sf=el.dataset.s;document.querySelectorAll('[data-s]').forEach(s=>s.classList.toggle('on',s===el));rc();}));
+document.getElementById('sq').addEventListener('input',e=>{sq=e.target.value.trim();rc();});
+
+// ── INIT ──────────────────────────────────────────────────────────────
+rc();rf();
+</script>
+
+</body>
+</html>
